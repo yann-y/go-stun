@@ -15,48 +15,81 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-
 	"github.com/ccding/go-stun/stun"
+	"log"
+	"os/exec"
+	"strings"
+	"time"
 )
 
 func main() {
 	var serverAddr = flag.String("s", stun.DefaultServerAddr, "STUN server address")
-	var b = flag.Bool("b", false, "NAT behavior test mode")
-	var v = flag.Bool("v", false, "verbose mode")
-	var vv = flag.Bool("vv", false, "double verbose mode (includes -v)")
-	var vvv = flag.Bool("vvv", false, "triple verbose mode (includes -v and -vv)")
+	var p = flag.Int("p", stun.DefaultPort, "port to listen on for client")
+	var v = flag.Bool("info", false, "verbose mode")
+	var vv = flag.Bool("debug", false, "double verbose mode (includes -info)")
+	var lp = flag.Int("loop", 0, "loop interval (company: s)")
 	flag.Parse()
-
+	// 参数检验
+	serverAddr = parse(*serverAddr)
+	fmt.Println("stun server addr :", *serverAddr)
+	test(serverAddr, p, v, vv, *lp)
+	//externalIP()
+	//sig := make(chan os.Signal)
+	//signal.Notify(sig)
+	//fmt.Println(<-sig)
+}
+func test(serverAddr *string, p *int, v, vv *bool, loop int) {
 	// Creates a STUN client. NewClientWithConnection can also be used if you want to handle the UDP listener by yourself.
 	client := stun.NewClient()
 	// The default addr (stun.DefaultServerAddr) will be used unless we call SetServerAddr.
 	client.SetServerAddr(*serverAddr)
 	// Non verbose mode will be used by default unless we call SetVerbose(true) or SetVVerbose(true).
-	client.SetVerbose(*v || *vv || *vvv)
-	client.SetVVerbose(*vv || *vvv)
-
-	if *b {
-		behaviorTest(client)
-		return
-	}
-
+	client.SetVerbose(*v || *vv)
+	client.SetVVerbose(*vv)
+	client.SetServerPort(*p)
 	// Discover the NAT and return the result.
-	nat, host, err := client.Discover()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println("NAT Type:", nat)
-	if host != nil {
-		fmt.Println("External IP Family:", host.Family())
-		fmt.Println("External IP:", host.IP())
-		fmt.Println("External Port:", host.Port())
+	for {
+		nat, host, err := client.Discover()
+		if err != nil {
+			return
+		}
+		fmt.Println("NAT Type:", nat)
+		if host != nil {
+			fmt.Println("External IP Family:", host.Family())
+			fmt.Println("External IP:", host.IP())
+			fmt.Println("External Port:", host.Port())
+		}
+		if loop == 0 {
+			break
+		}
+		time.Sleep(time.Duration(loop) * time.Second)
 	}
 }
-
+func parse(serverAddr string) *string {
+	l := len(strings.Split(serverAddr, ":"))
+	switch l {
+	case 2:
+		return &serverAddr
+	default:
+		s := serverAddr + ":3478"
+		return &s
+	}
+}
+func externalIP() {
+	cmd := exec.Command("curl", "cip.cc")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout // 标准输出
+	cmd.Stderr = &stderr // 标准错误
+	err := cmd.Run()
+	outStr, _ := string(stdout.Bytes()), string(stderr.Bytes())
+	fmt.Printf("ip info:\n%s\nerr:\n", outStr)
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
+}
 func behaviorTest(c *stun.Client) {
 	natBehavior, err := c.BehaviorTest()
 	if err != nil {

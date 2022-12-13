@@ -25,6 +25,7 @@ import (
 type Client struct {
 	serverAddr   string
 	softwareName string
+	port         int
 	conn         net.PacketConn
 	logger       *Logger
 }
@@ -35,6 +36,7 @@ func NewClient() *Client {
 	c := new(Client)
 	c.SetSoftwareName(DefaultSoftwareName)
 	c.logger = NewLogger()
+	c.port = DefaultPort
 	return c
 }
 
@@ -75,6 +77,9 @@ func (c *Client) SetServerAddr(address string) {
 func (c *Client) SetSoftwareName(name string) {
 	c.softwareName = name
 }
+func (c *Client) SetServerPort(port int) {
+	c.port = port
+}
 
 // Discover contacts the STUN server and gets the response of NAT type, host
 // for UDP punching.
@@ -86,11 +91,15 @@ func (c *Client) Discover() (NATType, *Host, error) {
 	if err != nil {
 		return NATError, nil, err
 	}
+	laddr := &net.UDPAddr{
+		Port: c.port,
+	}
 	// Use the connection passed to the client if it is not nil, otherwise
 	// create a connection and close it at the end.
 	conn := c.conn
 	if conn == nil {
-		conn, err = net.ListenUDP("udp", nil)
+		c.logger.Debugln("Listening port:", laddr.String())
+		conn, err = net.ListenUDP("udp", laddr)
 		if err != nil {
 			return NATError, nil, err
 		}
