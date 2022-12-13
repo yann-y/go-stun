@@ -31,11 +31,27 @@ func main() {
 	var v = flag.Bool("info", false, "verbose mode")
 	var vv = flag.Bool("debug", false, "double verbose mode (includes -info)")
 	var lp = flag.Int("loop", 0, "loop interval (company: s)")
+	var ttl = flag.Bool("ttl", false, "loop interval (company: s)")
 	flag.Parse()
 	// 参数检验
 	serverAddr = parse(*serverAddr)
 	fmt.Println("stun server addr :", *serverAddr)
-	test(serverAddr, p, v, vv, *lp)
+	if *ttl == true {
+		// Creates a STUN client. NewClientWithConnection can also be used if you want to handle the UDP listener by yourself.
+		client := stun.NewClient()
+		// The default addr (stun.DefaultServerAddr) will be used unless we call SetServerAddr.
+		client.SetServerAddr(*serverAddr)
+		// Non verbose mode will be used by default unless we call SetVerbose(true) or SetVVerbose(true).
+		client.SetVerbose(*v || *vv)
+		client.SetVVerbose(*vv)
+		client.SetServerPort(*p)
+		err := client.NatTTL()
+		if err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		test(serverAddr, p, v, vv, *lp)
+	}
 	//externalIP()
 	//sig := make(chan os.Signal)
 	//signal.Notify(sig)

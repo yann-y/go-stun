@@ -153,3 +153,24 @@ func (c *Client) Keepalive() (*Host, error) {
 	}
 	return resp.mappedAddr, nil
 }
+
+func (c *Client) NatTTL() error {
+	if c.serverAddr == "" {
+		c.SetServerAddr(DefaultServerAddr)
+	}
+	serverUDPAddr, err := net.ResolveUDPAddr("udp", c.serverAddr)
+	if err != nil {
+		return err
+	}
+	// Use the connection passed to the client if it is not nil, otherwise
+	// create a connection and close it at the end.
+	conn := c.conn
+	if conn == nil {
+		conn, err = net.ListenUDP("udp", nil)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+	}
+	return c.natTTL(conn, serverUDPAddr)
+}
