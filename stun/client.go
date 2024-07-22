@@ -25,6 +25,7 @@ import (
 type Client struct {
 	serverAddr   string
 	softwareName string
+	ip           net.IP
 	port         int
 	conn         net.PacketConn
 	logger       *Logger
@@ -77,8 +78,11 @@ func (c *Client) SetServerAddr(address string) {
 func (c *Client) SetSoftwareName(name string) {
 	c.softwareName = name
 }
-func (c *Client) SetServerPort(port int) {
+func (c *Client) SetClientPort(port int) {
 	c.port = port
+}
+func (c *Client) SetClientAddr(ip net.IP) {
+	c.ip = ip
 }
 
 // Discover contacts the STUN server and gets the response of NAT type, host
@@ -92,6 +96,7 @@ func (c *Client) Discover() (NATType, *Host, error) {
 		return NATError, nil, err
 	}
 	laddr := &net.UDPAddr{
+		IP:   c.ip,
 		Port: c.port,
 	}
 	// Use the connection passed to the client if it is not nil, otherwise

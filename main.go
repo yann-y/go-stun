@@ -20,12 +20,15 @@ import (
 	"fmt"
 	"github.com/ccding/go-stun/stun"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
 	"time"
 )
 
 func main() {
+	//interface
+	var i = flag.String("i", "", "either interface name or address")
 	var serverAddr = flag.String("s", stun.DefaultServerAddr, "STUN server address")
 	var p = flag.Int("p", stun.DefaultPort, "port to listen on for client")
 	var v = flag.Bool("info", false, "verbose mode")
@@ -36,28 +39,6 @@ func main() {
 	// 参数检验
 	serverAddr = parse(*serverAddr)
 	fmt.Println("stun server addr :", *serverAddr)
-	if *ttl == true {
-		// Creates a STUN client. NewClientWithConnection can also be used if you want to handle the UDP listener by yourself.
-		client := stun.NewClient()
-		// The default addr (stun.DefaultServerAddr) will be used unless we call SetServerAddr.
-		client.SetServerAddr(*serverAddr)
-		// Non verbose mode will be used by default unless we call SetVerbose(true) or SetVVerbose(true).
-		client.SetVerbose(*v || *vv)
-		client.SetVVerbose(*vv)
-		client.SetServerPort(*p)
-		err := client.NatTTL()
-		if err != nil {
-			fmt.Println(err)
-		}
-	} else {
-		test(serverAddr, p, v, vv, *lp)
-	}
-	//externalIP()
-	//sig := make(chan os.Signal)
-	//signal.Notify(sig)
-	//fmt.Println(<-sig)
-}
-func test(serverAddr *string, p *int, v, vv *bool, loop int) {
 	// Creates a STUN client. NewClientWithConnection can also be used if you want to handle the UDP listener by yourself.
 	client := stun.NewClient()
 	// The default addr (stun.DefaultServerAddr) will be used unless we call SetServerAddr.
@@ -65,11 +46,34 @@ func test(serverAddr *string, p *int, v, vv *bool, loop int) {
 	// Non verbose mode will be used by default unless we call SetVerbose(true) or SetVVerbose(true).
 	client.SetVerbose(*v || *vv)
 	client.SetVVerbose(*vv)
-	client.SetServerPort(*p)
+	client.SetClientPort(*p)
+	if *i != "" {
+		ipaddr := net.ParseIP(*i)
+		if ipaddr == nil {
+			ipaddr = getLocalIpV4(*i)
+			fmt.Printf("interface name: %s, addr: %s \n", *i, ipaddr.To4().String())
+		}
+		client.SetClientAddr(ipaddr)
+	}
+	if *ttl == true {
+		err := client.NatTTL()
+		if err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		test(client, *lp)
+	}
+	//externalIP()
+	//sig := make(chan os.Signal)
+	//signal.Notify(sig)
+	//fmt.Println(<-sig)
+}
+func test(client *stun.Client, loop int) {
 	// Discover the NAT and return the result.
 	for {
 		nat, host, err := client.Discover()
 		if err != nil {
+			fmt.Printf("Discover err: %v\n", err)
 			return
 		}
 		fmt.Println("NAT Type:", nat)
@@ -117,4 +121,28 @@ func behaviorTest(c *stun.Client) {
 		fmt.Println("Filtering Behavior:", natBehavior.FilteringType)
 		fmt.Println("   Normal NAT Type:", natBehavior.NormalType())
 	}
+}
+func getLocalIpV4(name string) net.IP {
+	inters, err := net.Interfaces()
+	if err != nil {
+		panic(err)
+	}
+	for _, inter := range inters {
+		if inter.Name == name {
+			addrs, err := inter.Addrs()
+			if err != nil {
+				break
+			}
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+					//判断是否存在IPV4 IP 如果没有过滤
+					if ipnet.IP.To4() != nil {
+						return ipnet.IP
+					}
+				}
+			}
+			break
+		}
+	}
+	return nil
 }
